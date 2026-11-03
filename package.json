@@ -11,17 +11,19 @@
   },
   "dependencies": {
     "@openai/agents": "^0.10.1",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@edgeone/types": "^1.0.1",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.5.3",
-    "vite": "^5.4.2",
-    "@edgeone/types": "^1.0.1"
+    "vite": "^5.4.2"
   }
 }
