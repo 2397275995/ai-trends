@@ -96,3 +96,41 @@ EdgeOne 控制台 → 项目 → **函数日志**，搜 `[notify]`：
 - 报告本身就是网页，分享链接即可
 - 加 RSS，别人用 Reeder / Feedly 订阅
 - 群里分享，内部传播最快
+
+---
+
+## PDF 发到邮箱（QQ 邮箱可收）
+
+QQ 机器人只能发文本，发不了文件。要把 PDF 送到手机，走 **邮件附件**。
+
+由 GitHub Actions 每天 09:05（北京时间）自动执行，不占用云函数资源。
+
+### 一次性配置（3 个 Secret）
+
+1. 打开 QQ 邮箱网页版 → 设置 → 账户 → 开启 **SMTP 服务** → 生成**授权码**（16 位，不是登录密码）
+2. 仓库 Settings → Secrets and variables → Actions，添加：
+
+| Secret | 值 |
+| --- | --- |
+| `MAIL_USER` | 你的 QQ 邮箱，如 `2819489434@qq.com` |
+| `MAIL_PASS` | 上一步的**授权码** |
+| `MAIL_TO` | 收件邮箱，一般同上 |
+
+### 手动测试
+
+仓库 → Actions → 「每日 AI 报告 PDF 邮件」→ Run workflow。
+
+跑完后邮箱里会有一封带 PDF 附件的邮件，附件名形如 `AI趋势日报-20261103.pdf`。
+
+### 本地预览
+
+```bash
+DRY_RUN=1 python scripts/report_pdf.py    # 生成 preview.pdf，不发邮件
+```
+
+### 几点说明
+
+- 报告从 `https://aitrend.lxyblog.top/ai-trends/latest` 拉取，站点挂了就拉不到（可改 `REPORT_URL`）
+- 邮件正文放摘要，完整内容在 PDF 附件
+- 定时是 UTC 01:05，比 09:00 的生成晚 5 分钟，等它跑完
+- 用的是 Ubuntu 自带的 Chrome 打印，中文字体由 `fonts-noto-cjk` 提供
