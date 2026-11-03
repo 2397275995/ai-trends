@@ -6,6 +6,7 @@ import { mergeItemLibrary, type TrendLibraryItem } from './_items.js';
 import { loadItemsFromMemory, saveItemsToMemory, saveReportToMemory } from './_memory.js';
 import { runAgentPipeline } from './_model.js';
 import type { PipelineEmit } from './_model.js';
+import { notifyReport } from './_notify.js';
 import { generateFallbackReport, utcNow } from './_report.js';
 import { collectSources } from './_sources.js';
 import { loadItemLibrary, saveItemLibrary, saveReport } from './_storage.js';
@@ -87,6 +88,18 @@ export async function onRequest(context: AgentContext): Promise<Response> {
         if (!savedItemsToMemory) await saveItemLibrary(mergeResult.items);
         report.storage = savedToMemory ? 'memory' : 'file-fallback';
         if (!savedToMemory) await saveReport(report);
+
+        // ── 分发（失败不影响主流程）──
+        try {
+          const results = await notifyReport(report, getEnv(context), trigger === 'schedule');
+          if (results.length) {
+            console.log('[notify]', results.map((r) => `${r.channel}:${r.ok ? 'ok' : 'fail'}`).join(' '));
+            const failed = results.filter((r) => !r.ok);
+            if (failed.length) console.log('[notify] errors:', JSON.stringify(failed));
+          }
+        } catch (e) {
+          console.log('[notify] unexpected error:', e instanceof Error ? e.message : String(e));
+        }
 
         // ── Final event with complete report ──
         emit({ stage: 'complete', status: 'done', report });
