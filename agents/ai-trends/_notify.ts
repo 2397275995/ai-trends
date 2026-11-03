@@ -8,7 +8,10 @@
  *   NOTIFY_DINGTALK   钉钉群机器人 webhook（注意把「加签」关掉或另配）
  *   NOTIFY_FEISHU     飞书群机器人 webhook
  *   NOTIFY_BARK       Bark 推送地址，形如 https://api.day.app/你的KEY
- *   NOTIFY_PUSHPLUS   PushPlus token（微信推送）
+ *   NOTIFY_PUSHPLUS   PushPlus token（微信 / QQ 都能用）
+ *   NOTIFY_PUSHPLUS_CHANNEL  可选 wechat（默认）或 qq；填 qq 时走 QQ 机器人
+ *   NOTIFY_QMSG       Qmsg酱 key（另一条 QQ 推送路线）
+ *   NOTIFY_QMSG_QQ    接收消息的 QQ 号
  *   NOTIFY_WEBHOOK    自定义 webhook，会把报告 JSON POST 过去
  *
  *   NOTIFY_ON_SCHEDULE_ONLY  设为 1 时只在定时任务里推送，手动生成不推
@@ -38,7 +41,7 @@ function dayLabel(iso: string): string {
   return `${bj.getUTCMonth() + 1} 月 ${bj.getUTCDate()} 日`;
 }
 
-/** 纯文本版（用于飞书、自定义 webhook、Bark） */
+/** 纯文本版（用于飞书、自定义 webhook、Bark、QQ） */
 export function buildText(report: TrendReport, env: Env): string {
   const head = report.status === 'success' ? 'AI 趋势日报' : 'AI 趋势日报（生成异常）';
   const lines = [
@@ -65,7 +68,7 @@ export function buildText(report: TrendReport, env: Env): string {
   return lines.join('\n');
 }
 
-/** Markdown 版（企业微信 / 钉钉 / PushPlus 用） */
+/** Markdown 版（企业微信 / 钉钉 / PushPlus 微信用） */
 export function buildMarkdown(report: TrendReport, env: Env): string {
   const head = report.status === 'success' ? '## AI 趋势日报' : '## AI 趋势日报（生成异常）';
   const lines = [`${head}`, `> ${dayLabel(report.generatedAt)} · 共 ${report.itemCount ?? 0} 条`, '', report.summary || '_本期没有摘要_', ''];
@@ -113,6 +116,28 @@ async function sendPushplus(token: string, title: string, md: string): Promise<v
   await postJson('https://www.pushplus.plus/send', { token, title, content: md, template: 'markdown' });
 }
 
+/** QQ 渠道：QQ 原生 Markdown 不支持代码块和 HTML，用纯文本最稳 */
+async function sendPushplusQQ(token: string, title: string, text: string): Promise<void> {
+  await postJson('https://www.pushplus.plus/send', {
+    token,
+    title,
+    content: text,
+    template: 'txt',
+    channel: 'qq',
+  });
+}
+
+/** Qmsg酱：极简的 QQ 单聊推送 */
+async function sendQmsg(key: string, qq: string, text: string): Promise<void> {
+  const body = new URLSearchParams({ msg: text, qq });
+  const res = await fetch(`https://qmsg.zendee.cn/v3/send/${key}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
+}
+
 /**
  * 分发一份报告。任何渠道失败都不抛错，只记录结果。
  * 返回每个渠道的执行情况，便于在日志里排查。
@@ -130,7 +155,16 @@ export async function notifyReport(report: TrendReport, env: Env, isSchedule = f
   if (env.NOTIFY_DINGTALK) tasks.push(['dingtalk', () => sendDingtalk(env.NOTIFY_DINGTALK!, title, md)]);
   if (env.NOTIFY_FEISHU) tasks.push(['feishu', () => sendFeishu(env.NOTIFY_FEISHU!, text)]);
   if (env.NOTIFY_BARK) tasks.push(['bark', () => sendBark(env.NOTIFY_BARK!, title, text)]);
-  if (env.NOTIFY_PUSHPLUS) tasks.push(['pushplus', () => sendPushplus(env.NOTIFY_PUSHPLUS!, title, md)]);
+  if (env.NOTIFY_PUSHPLUS) {
+    const ppChannel = (env.NOTIFY_PUSHPLUS_CHANNEL || 'wechat').toLowerCase();
+    tasks.push([
+      `pushplus-${ppChannel}`,
+      ppChannel === 'qq'
+        ? () => sendPushplusQQ(env.NOTIFY_PUSHPLUS!, title, text)
+        : () => sendPushplus(env.NOTIFY_PUSHPLUS!, title, md),
+    ]);
+  }
+  if (env.NOTIFY_QMSG) tasks.push(['qmsg', () => sendQmsg(env.NOTIFY_QMSG!, env.NOTIFY_QMSG_QQ || '', text)]);
   if (env.NOTIFY_WEBHOOK) tasks.push(['webhook', () => postJson(env.NOTIFY_WEBHOOK!, report)]);
 
   for (const [channel, run] of tasks) {
