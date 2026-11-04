@@ -1,21 +1,66 @@
-name: 每日 AI 报告 PDF 邮件
+name: 每日 AI 报告：生成 + PDF + 邮件
 
 on:
   schedule:
-    # UTC 01:05 = 北京时间 09:05（比报告生成晚 5 分钟，等它跑完）
-    - cron: '5 1 * * *'
+    # UTC 01:00 = 北京时间 09:00，先触发采集
+    - cron: '0 1 * * *'
   workflow_dispatch: {}
 
+concurrency:
+  group: daily-ai-report
+  cancel-in-progress: false
+
 jobs:
-  send:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: 触发采集与生成（保持连接直到跑完）
+        run: |
+          echo "开始触发 /ai-trends/run ..."
+          set +e
+          curl -sS -N --max-time 1800 \
+            -X POST "https://aitrend.lxyblog.top/ai-trends/run" \
+            -H "content-type: application/json" \
+            -d '{"_schedule":true,"trigger":"schedule","sources":["hackernews","devto","web"],"limit":30}' \
+            --no-buffer > pipeline.log 2>&1
+          code=$?
+          echo "curl 退出码: $code"
+          # 打印阶段进展（只看关键行，避免刷屏）
+          grep -oE '"stage":"[a-z]+","status":"[a-z]+"' pipeline.log | tail -20 || true
+          tail -c 800 pipeline.log || true
+
+      - name: 等报告落库（轮询到有新报告为止，最多 12 分钟）
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+          from datetime import datetime, timezone, timedelta
+
+          API = 'https://aitrend.lxyblog.top/ai-trends/latest'
+          deadline = time.time() + 720
+          while time.time() < deadline:
+              try:
+                  with urllib.request.urlopen(API, timeout=30) as r:
+                      d = json.loads(r.read().decode())
+                  ts = d.get('generatedAt', '')
+                  dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                  age = (datetime.now(timezone.utc) - dt).total_seconds()
+                  print(f"最新报告 {ts}（{int(age)} 秒前）status={d.get('status')}")
+                  if age < 600 and d.get('status') == 'success':
+                      print('已拿到本次新报告')
+                      break
+              except Exception as e:
+                  print('轮询出错:', e)
+              time.sleep(20)
+          else:
+              print('等待超时，用现有的最新报告继续')
+          PY
 
       - name: 安装中文字体
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
