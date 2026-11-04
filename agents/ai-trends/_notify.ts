@@ -64,6 +64,7 @@ export function buildText(report: TrendReport, env: Env): string {
     lines.push(`共 ${report.itemCount} 条资讯，新增 ${report.newItemCount ?? 0} 条。`);
   }
   if (report.error) lines.push(`错误：${report.error}`);
+  if (report.agentWarning) lines.push(`降级提示：${report.agentWarning}`);
   lines.push('', `查看完整报告：${siteUrl(env)}`);
   return lines.join('\n');
 }
@@ -81,6 +82,7 @@ export function buildMarkdown(report: TrendReport, env: Env): string {
   }
 
   if (report.error) lines.push(`**错误**：${report.error}`, '');
+  if (report.agentWarning) lines.push(`**降级提示**：${report.agentWarning}`, '');
   lines.push(`[查看完整报告](${siteUrl(env)})`);
   return lines.join('\n');
 }
@@ -145,7 +147,8 @@ async function sendQmsg(key: string, qq: string, text: string): Promise<void> {
 export async function notifyReport(report: TrendReport, env: Env, isSchedule = false): Promise<NotifyResult[]> {
   if (env.NOTIFY_ON_SCHEDULE_ONLY === '1' && !isSchedule) return [];
 
-  const title = `AI 趋势日报 · ${dayLabel(report.generatedAt)}`;
+  const degraded = report.status !== 'success' || !!report.agentWarning;
+  const title = `AI 趋势日报${degraded ? '（异常）' : ''} · ${dayLabel(report.generatedAt)}`;
   const text = buildText(report, env);
   const md = buildMarkdown(report, env);
   const results: NotifyResult[] = [];

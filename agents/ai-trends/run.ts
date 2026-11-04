@@ -24,6 +24,20 @@ export async function onRequest(context: AgentContext): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // 统一的分发入口：成功和失败都走这里
+      const deliver = async (r: TrendReport) => {
+        try {
+          const results = await notifyReport(r, getEnv(context), trigger === 'schedule');
+          if (results.length) {
+            console.log('[notify]', results.map((x) => `${x.channel}:${x.ok ? 'ok' : 'fail'}`).join(' '));
+            const failedCh = results.filter((x) => !x.ok);
+            if (failedCh.length) console.log('[notify] errors:', JSON.stringify(failedCh));
+          }
+        } catch (e) {
+          console.log('[notify] unexpected error:', e instanceof Error ? e.message : String(e));
+        }
+      };
+
       const emit = (event: PipelineEmit) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
@@ -90,16 +104,7 @@ export async function onRequest(context: AgentContext): Promise<Response> {
         if (!savedToMemory) await saveReport(report);
 
         // ── 分发（失败不影响主流程）──
-        try {
-          const results = await notifyReport(report, getEnv(context), trigger === 'schedule');
-          if (results.length) {
-            console.log('[notify]', results.map((r) => `${r.channel}:${r.ok ? 'ok' : 'fail'}`).join(' '));
-            const failed = results.filter((r) => !r.ok);
-            if (failed.length) console.log('[notify] errors:', JSON.stringify(failed));
-          }
-        } catch (e) {
-          console.log('[notify] unexpected error:', e instanceof Error ? e.message : String(e));
-        }
+        await deliver(report);
 
         // ── Final event with complete report ──
         emit({ stage: 'complete', status: 'done', report });
@@ -125,6 +130,7 @@ export async function onRequest(context: AgentContext): Promise<Response> {
         const savedToMemory = await saveReportToMemory(context, failed).catch(() => false);
         if (!savedToMemory) await saveReport(failed);
 
+        await deliver(failed);
         emit({ stage: 'complete', status: 'failed', report: failed });
       } finally {
         try { controller.close(); } catch { /* already closed */ }
