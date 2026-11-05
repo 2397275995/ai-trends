@@ -3,7 +3,7 @@ name: 每日 AI 报告：生成 + PDF + 邮件
 on:
   schedule:
     # UTC 01:00 = 北京时间 09:00
-    - cron: '0 1 * * *'
+    - cron: '7 1 * * *'
   workflow_dispatch: {}
 
 concurrency:

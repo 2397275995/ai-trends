@@ -1,0 +1,19 @@
+name: 心跳测试（每 10 分钟）
+
+# 用途：确认这个仓库的 GitHub 定时任务到底会不会触发。
+# 如果连这个每 10 分钟的心跳都不跑，说明是仓库/账号层面的 cron 问题，
+# 跟业务工作流本身无关。验证完可以删掉本文件。
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 输出时间
+        run: |
+          echo "心跳触发时间（UTC）：$(date -u '+%Y-%m-%d %H:%M:%S')"
+          echo "心跳触发时间（北京）：$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')"
