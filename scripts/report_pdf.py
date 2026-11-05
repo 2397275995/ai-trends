@@ -33,6 +33,22 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+def _load_env_file() -> None:
+    """从 scripts/mail.env 读取邮件配置（本机定时任务用，云端走环境变量）。"""
+    path = Path(__file__).with_name('mail.env')
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding='utf-8').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        os.environ.setdefault(k, v)
+
+
+_load_env_file()
+
 REPORT_URL = os.environ.get('REPORT_URL', 'https://aitrend.lxyblog.top/ai-trends/latest')
 BEIJING = timezone(timedelta(hours=8))
 

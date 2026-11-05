@@ -149,3 +149,35 @@ GitHub Actions 里的 `schedule`：`cron: '0 1 * * *'`（UTC 01:00 = 北京时�
 - 高峰时段 GitHub 可能延迟 5～15 分钟才启动，属于正常
 - 仓库连续 60 天没有任何提交/操作，定时任务会被自动暂停（GitHub 会发邮件提醒，进去点一下即可恢复）
 - 触发后会对比「报告生成时间是否变化」，没变就判失败并跳过发信，避免把旧报告当新的发出去
+
+
+## 备用方案：本机 Windows 定时任务
+
+GitHub Actions 的 schedule 在这个仓库里实测不触发（心跳任务跑不起来），
+所以另外做了一个完全本机的方案，不依赖任何平台定时。
+
+### 文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `每日任务.bat` | 触发采集 → 等新报告 → 生成 PDF → 发邮件 |
+| `注册定时任务.bat` | 把它注册成每天 09:10 的 Windows 计划任务 |
+| `scripts/mail.env` | 邮件配置（QQ 邮箱 + 授权码） |
+| `logs/daily.log` | 每次运行的日志 |
+
+### 前提
+
+- 电脑每天 09:10 开着并联网
+- `scripts/mail.env` 里填好授权码
+
+### 安装
+
+1. 编辑 `scripts/mail.env`，把 `MAIL_PASS` 改成 QQ 邮箱的 16 位授权码
+2. 双击 `注册定时任务.bat`
+3. 想立刻验证：`schtasks /Run /TN "AI-Trends-Daily"`，然后看 `logs/daily.log`
+
+### 和 GitHub Actions 的关系
+
+两条都保留，但本机方案不依赖 GitHub 定时，更可控。
+如果哪天两封邮件重复到达，说明 GitHub 的定时恢复了，删掉
+`.github/workflows/daily-pdf.yml` 的 `schedule` 段即可。
