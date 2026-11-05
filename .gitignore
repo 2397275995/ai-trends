@@ -18,3 +18,7 @@ Thumbs.db
 .idea/
 *.swp
 .test-build/
+
+# 本地邮件配置，含授权码，绝不提交
+scripts/mail.env
+logs/
