@@ -9,7 +9,9 @@
 """
 
 import json
+import os
 import sys
+import uuid
 import time
 import urllib.error
 import urllib.request
@@ -45,11 +47,18 @@ def main() -> None:
     print(f'触发前的最新报告：{before_ts}（{before.get("itemCount")} 条）', flush=True)
 
     body = json.dumps(PAYLOAD).encode('utf-8')
+    # 接口强制要求这个头（6-36 位、字母数字和 -_.），否则直接 400
+    conv_id = os.environ.get('MAKERS_CONVERSATION_ID') or f'daily-{uuid.uuid4().hex[:24]}'
     req = urllib.request.Request(
         RUN, data=body,
-        headers={'content-type': 'application/json', 'accept': 'text/event-stream'},
+        headers={
+            'content-type': 'application/json',
+            'accept': 'text/event-stream',
+            'makers-conversation-id': conv_id,
+        },
         method='POST',
     )
+    print(f'会话 ID：{conv_id}', flush=True)
 
     print('开始触发 /ai-trends/run，保持连接直到流水线结束…', flush=True)
     stages = []
